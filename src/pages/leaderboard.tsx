@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import styles from "../styles/Home.module.css";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { HybridLeaderboard } from "../utils/leaderboardAPI";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,19 +24,43 @@ export default function Leaderboard() {
     const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
     const [legacyScores, setLegacyScores] = useState<ScoreEntry[]>([]);
     const [isAnimating, setIsAnimating] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Load new leaderboard format (with usernames)
-        const savedLeaderboard = localStorage.getItem("pacman-leaderboard");
-        if (savedLeaderboard) {
-            setLeaderboard(JSON.parse(savedLeaderboard));
-        }
+        const loadLeaderboard = async () => {
+            try {
+                setIsLoading(true);
+                setError(null);
 
-        // Load legacy scores format (without usernames) as fallback
-        const savedScores = localStorage.getItem("pacman-scores");
-        if (savedScores) {
-            setLegacyScores(JSON.parse(savedScores));
-        }
+                // Load data from API with fallback to localStorage
+                const result = await HybridLeaderboard.getLeaderboard(10, 0);
+
+                if (result.data.leaderboard) {
+                    setLeaderboard(result.data.leaderboard);
+                }
+
+                // Load legacy scores format (without usernames) as fallback
+                const savedScores = localStorage.getItem("pacman-scores");
+                if (savedScores) {
+                    setLegacyScores(JSON.parse(savedScores));
+                }
+            } catch (err) {
+                console.error("Failed to load leaderboard:", err);
+                setError("Failed to load leaderboard data");
+
+                // Fallback to localStorage only
+                const savedLeaderboard =
+                    localStorage.getItem("pacman-leaderboard");
+                if (savedLeaderboard) {
+                    setLeaderboard(JSON.parse(savedLeaderboard));
+                }
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadLeaderboard();
 
         // Start animation after component mounts
         setTimeout(() => setIsAnimating(true), 100);
@@ -67,16 +92,6 @@ export default function Leaderboard() {
             " " +
             date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         );
-    };
-
-    const clearScores = () => {
-        if (confirm("Are you sure you want to clear all scores?")) {
-            localStorage.removeItem("pacman-leaderboard");
-            localStorage.removeItem("pacman-scores");
-            localStorage.removeItem("pacman-highscore");
-            setLeaderboard([]);
-            setLegacyScores([]);
-        }
     };
 
     const getRankEmoji = (index: number) => {
@@ -161,7 +176,7 @@ export default function Leaderboard() {
                                         <span className={styles.buttonIcon}>
                                             ▶
                                         </span>
-                                        PLAY
+                                        PLAY AGAIN
                                     </div>
                                 </Link>
 
@@ -177,7 +192,22 @@ export default function Leaderboard() {
                         {/* Right Column - Leaderboard entries */}
                         <div className={styles.rightColumn}>
                             <div className={styles.leaderboardContainer}>
-                                {displayData.length > 0 ? (
+                                {isLoading ? (
+                                    <div className={styles.loadingMessage}>
+                                        <div className={styles.blinkingText}>
+                                            LOADING HIGH SCORES...
+                                        </div>
+                                    </div>
+                                ) : error ? (
+                                    <div className={styles.errorMessage}>
+                                        <div className={styles.blinkingText}>
+                                            {error}
+                                        </div>
+                                        <div className={styles.errorSubtext}>
+                                            Using offline data
+                                        </div>
+                                    </div>
+                                ) : displayData.length > 0 ? (
                                     <div className={styles.leaderboardList}>
                                         {displayData.map((entry, index) => (
                                             <div

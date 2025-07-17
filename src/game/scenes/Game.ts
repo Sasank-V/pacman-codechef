@@ -1,5 +1,6 @@
 import { EventBus } from "../EventBus";
 import { Scene } from "phaser";
+import { HybridLeaderboard } from "../../utils/leaderboardAPI";
 
 interface GameState {
     score: number;
@@ -699,6 +700,14 @@ export class Game extends Scene {
 
     hitGhost(pacman: any, ghost: any) {
         if (this.powerMode) {
+            // Check if ghost is already dead to prevent multiple score increases
+            if (ghost.getData("isDead")) {
+                return; // Don't process multiple hits on the same ghost
+            }
+
+            // Immediately mark ghost as dead to prevent further collisions
+            ghost.setData("isDead", true);
+
             // Eat the ghost
             this.gameState.score += 200;
 
@@ -986,10 +995,10 @@ export class Game extends Scene {
         let cursorTimer: Phaser.Time.TimerEvent | null = null;
 
         // Handle keyboard input
-        const handleKeyboard = (event: KeyboardEvent) => {
+        const handleKeyboard = async (event: KeyboardEvent) => {
             if (event.key === "Enter" && username.trim().length > 0) {
                 // Submit username to leaderboard (trim before submitting)
-                this.submitToLeaderboard(username.trim());
+                await this.submitToLeaderboard(username.trim());
 
                 // Remove event listener
                 this.input.keyboard?.off("keydown", handleKeyboard);
@@ -1051,69 +1060,67 @@ export class Game extends Scene {
         });
     }
 
-    submitToLeaderboard(username: string) {
+    async submitToLeaderboard(username: string) {
         const leaderboardEntry = {
             name: username,
             score: this.gameState.score,
             level: this.gameState.level,
-            date: new Date().toISOString(),
         };
 
-        // Get existing leaderboard from localStorage
-        let leaderboard = [];
         try {
-            const existingData = localStorage.getItem("pacman-leaderboard");
-            if (existingData) {
-                leaderboard = JSON.parse(existingData);
-            }
-        } catch (error) {
-            console.warn("Could not load existing leaderboard:", error);
-            leaderboard = [];
-        }
+            // Submit to API with fallback to localStorage
+            const result = await HybridLeaderboard.submitScore(
+                leaderboardEntry
+            );
 
-        // Add new entry
-        leaderboard.push(leaderboardEntry);
+            console.log("Score submitted successfully:", result.message);
 
-        // Sort by score (highest first) and keep top 10
-        leaderboard.sort((a: any, b: any) => b.score - a.score);
-        leaderboard = leaderboard.slice(0, 10);
+            // Emit leaderboard update event with API response
+            window.dispatchEvent(
+                new CustomEvent("phaser-game-event", {
+                    detail: {
+                        type: "leaderboardUpdate",
+                        data: {
+                            leaderboard: result.data.leaderboard,
+                            newEntry: result.data.submittedScore,
+                            rank: result.data.rank,
+                        },
+                    },
+                })
+            );
 
-        // Save back to localStorage
-        try {
-            localStorage.setItem(
-                "pacman-leaderboard",
-                JSON.stringify(leaderboard)
+            // Also emit game over event with username
+            window.dispatchEvent(
+                new CustomEvent("phaser-game-event", {
+                    detail: {
+                        type: "gameOver",
+                        data: {
+                            score: this.gameState.score,
+                            level: this.gameState.level,
+                            username,
+                            rank: result.data.rank,
+                        },
+                    },
+                })
             );
         } catch (error) {
-            console.warn("Could not save leaderboard:", error);
+            console.error("Failed to submit score:", error);
+
+            // Emit error event but still proceed with game over
+            window.dispatchEvent(
+                new CustomEvent("phaser-game-event", {
+                    detail: {
+                        type: "gameOver",
+                        data: {
+                            score: this.gameState.score,
+                            level: this.gameState.level,
+                            username: username,
+                            error: "Failed to submit score to leaderboard",
+                        },
+                    },
+                })
+            );
         }
-
-        // Emit leaderboard update event
-        window.dispatchEvent(
-            new CustomEvent("phaser-game-event", {
-                detail: {
-                    type: "leaderboardUpdate",
-                    data: {
-                        leaderboard: leaderboard,
-                        newEntry: leaderboardEntry,
-                    },
-                },
-            })
-        );
-
-        // Also emit game over event with username
-        window.dispatchEvent(
-            new CustomEvent("phaser-game-event", {
-                detail: {
-                    type: "gameOver",
-                    data: {
-                        score: this.gameState.score,
-                        username: username,
-                        leaderboard: leaderboard,
-                    },
-                },
-            })
-        );
     }
 
     showPostGameOptions() {

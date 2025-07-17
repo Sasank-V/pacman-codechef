@@ -78,12 +78,12 @@
 }
 
 .primaryButton {
-  background: linear-gradient(45deg, #ff6b35, #ff8c42);
+  background: transparent;
   border: none;
   padding: 1rem 2rem;
   font-size: 1.2rem;
   font-weight: bold;
-  color: white;
+  color: #fff;
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -289,10 +289,10 @@
 }
 
 .homeButton {
-  background: linear-gradient(45deg, #ff6b35, #ff8c42);
+  background: transparent;
   border: 2px solid #ffff00;
   padding: 0.6rem 1rem;
-  color: #000;
+  color: #fff;
   border-radius: 8px;
   cursor: pointer;
   text-decoration: none;
@@ -303,12 +303,12 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  text-shadow: 0 0 10px #000;
+  text-shadow: 0 0 10px #fff;
   box-shadow: 0 0 15px rgba(255, 107, 53, 0.5);
 }
 
 .homeButton:hover {
-  background: linear-gradient(45deg, #ff8c42, #ffaa66);
+  background: transparent;
   transform: translateY(-2px);
   box-shadow: 0 5px 20px rgba(255, 107, 53, 0.8);
   border-color: #fff;
@@ -962,10 +962,9 @@
   display: block;
   margin: 1rem auto;
   padding: 1rem 2rem;
-  background: linear-gradient(45deg, #ff6b35, #ff8c42);
   border: 3px solid #ffff00;
   border-radius: 10px;
-  color: #000;
+  color: #fff;
   text-decoration: none;
   font-weight: bold;
   font-size: 1.2rem;
@@ -980,7 +979,7 @@
 
 .arcadeButton:hover {
   transform: translateY(-3px) scale(1.05);
-  background: linear-gradient(45deg, #ff8c42, #ffaa66);
+  background: transparent;
   box-shadow: 
     0 5px 30px rgba(255, 107, 53, 0.8),
     inset 0 0 30px rgba(255, 255, 255, 0.2);
