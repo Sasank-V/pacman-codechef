@@ -595,23 +595,23 @@ export class Game extends Scene {
                 // Ghost went off the left edge, warp to right
                 const newX = rightEdge - 15;
                 ghost.setPosition(newX, ghostY);
-                
+
                 // Update grid movement targets to prevent conflicts
                 ghost.setData("targetX", newX);
                 ghost.setData("targetY", ghostY);
                 ghost.setData("isMoving", false);
-                
+
                 console.log("Ghost warped from left to right");
             } else if (ghost.x > rightEdge + 15) {
                 // Ghost went off the right edge, warp to left
                 const newX = leftEdge + 15;
                 ghost.setPosition(newX, ghostY);
-                
+
                 // Update grid movement targets to prevent conflicts
                 ghost.setData("targetX", newX);
                 ghost.setData("targetY", ghostY);
                 ghost.setData("isMoving", false);
-                
+
                 console.log("Ghost warped from right to left");
             }
         }
