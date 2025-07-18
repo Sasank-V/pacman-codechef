@@ -280,6 +280,13 @@ export class Game extends Scene {
         this.pacman = this.physics.add.sprite(startX, startY, "pacman_0");
         this.pacman.setScale(1.5); // Increased scale to fit larger tiles
         (this.pacman.body as Phaser.Physics.Arcade.Body).setSize(24, 24); // Smaller body for better movement
+
+        // Initialize grid movement data for tile-based movement
+        this.pacman.setData("targetX", startX);
+        this.pacman.setData("targetY", startY);
+        this.pacman.setData("isMoving", false);
+        this.pacman.setData("direction", "right");
+        this.pacman.setData("nextDirection", "right"); // For buffered input
     }
 
     createGhosts() {
@@ -437,44 +444,100 @@ export class Game extends Scene {
 
         const speed = this.pacmanSpeed;
 
-        // Get input
-        let newDirection = this.pacmanDirection;
+        // Get input and store as next direction (buffered input)
+        let requestedDirection = this.pacman.getData("nextDirection");
 
         if (this.cursors.left.isDown || this.wasdKeys.A.isDown) {
-            newDirection = "left";
+            requestedDirection = "left";
         } else if (this.cursors.right.isDown || this.wasdKeys.D.isDown) {
-            newDirection = "right";
+            requestedDirection = "right";
         } else if (this.cursors.up.isDown || this.wasdKeys.W.isDown) {
-            newDirection = "up";
+            requestedDirection = "up";
         } else if (this.cursors.down.isDown || this.wasdKeys.S.isDown) {
-            newDirection = "down";
+            requestedDirection = "down";
         }
 
-        // Apply movement with improved collision handling
-        const body = this.pacman.body as Phaser.Physics.Arcade.Body;
-        body.setVelocity(0, 0);
+        // Store the requested direction for buffering
+        this.pacman.setData("nextDirection", requestedDirection);
 
-        switch (newDirection) {
-            case "left":
-                body.setVelocityX(-speed);
-                this.pacman.setAngle(180);
-                this.pacmanDirection = "left";
-                break;
-            case "right":
-                body.setVelocityX(speed);
-                this.pacman.setAngle(0);
-                this.pacmanDirection = "right";
-                break;
-            case "up":
-                body.setVelocityY(-speed);
-                this.pacman.setAngle(270);
-                this.pacmanDirection = "up";
-                break;
-            case "down":
-                body.setVelocityY(speed);
-                this.pacman.setAngle(90);
-                this.pacmanDirection = "down";
-                break;
+        // Grid-based movement system (similar to ghosts)
+        const targetX = this.pacman.getData("targetX");
+        const targetY = this.pacman.getData("targetY");
+        const isMoving = this.pacman.getData("isMoving");
+        const currentDirection = this.pacman.getData("direction");
+        const body = this.pacman.body as Phaser.Physics.Arcade.Body;
+
+        // Check if Pac-Man has reached its target position
+        const tolerance = 2; // Small tolerance for floating point precision
+        const reachedTarget =
+            Math.abs(this.pacman.x - targetX) < tolerance &&
+            Math.abs(this.pacman.y - targetY) < tolerance;
+
+        if (!isMoving || reachedTarget) {
+            // Snap to exact grid position
+            this.pacman.setPosition(targetX, targetY);
+            body.setVelocity(0, 0);
+            this.pacman.setData("isMoving", false);
+
+            // Try to move in the requested direction first (buffered input)
+            let newTarget = this.getPacManNextGridPosition(requestedDirection);
+            let directionToUse = requestedDirection;
+
+            // If requested direction is blocked, continue in current direction
+            if (!newTarget) {
+                newTarget = this.getPacManNextGridPosition(currentDirection);
+                directionToUse = currentDirection;
+            }
+
+            // If we can move, start moving to the new target
+            if (newTarget) {
+                this.pacman.setData("targetX", newTarget.x);
+                this.pacman.setData("targetY", newTarget.y);
+                this.pacman.setData("isMoving", true);
+                this.pacman.setData("direction", directionToUse);
+
+                // Set Pac-Man rotation based on direction
+                switch (directionToUse) {
+                    case "left":
+                        this.pacman.setAngle(180);
+                        break;
+                    case "right":
+                        this.pacman.setAngle(0);
+                        break;
+                    case "up":
+                        this.pacman.setAngle(270);
+                        break;
+                    case "down":
+                        this.pacman.setAngle(90);
+                        break;
+                }
+
+                // Update the pacmanDirection for compatibility
+                this.pacmanDirection = directionToUse;
+            }
+        }
+
+        // If moving, animate towards target
+        if (this.pacman.getData("isMoving")) {
+            const currentTargetX = this.pacman.getData("targetX");
+            const currentTargetY = this.pacman.getData("targetY");
+
+            // Calculate direction vector
+            const deltaX = currentTargetX - this.pacman.x;
+            const deltaY = currentTargetY - this.pacman.y;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+            if (distance > 1) {
+                // Normalize and apply speed
+                const normalizedX = (deltaX / distance) * speed;
+                const normalizedY = (deltaY / distance) * speed;
+                body.setVelocity(normalizedX, normalizedY);
+            } else {
+                // Close enough, snap to target
+                this.pacman.setPosition(currentTargetX, currentTargetY);
+                body.setVelocity(0, 0);
+                this.pacman.setData("isMoving", false);
+            }
         }
 
         // Handle warp gates (left and right edges of the maze)
@@ -501,11 +564,25 @@ export class Game extends Scene {
             // Pac-Man is at the warp tunnel level
             if (this.pacman.x < leftEdge - 15) {
                 // Pac-Man went off the left edge, warp to right
-                this.pacman.setPosition(rightEdge - 15, pacmanY);
+                const newX = rightEdge - 15;
+                this.pacman.setPosition(newX, pacmanY);
+
+                // Update grid movement targets to prevent conflicts
+                this.pacman.setData("targetX", newX);
+                this.pacman.setData("targetY", pacmanY);
+                this.pacman.setData("isMoving", false);
+
                 console.log("Warped from left to right");
             } else if (this.pacman.x > rightEdge + 15) {
                 // Pac-Man went off the right edge, warp to left
-                this.pacman.setPosition(leftEdge + 15, pacmanY);
+                const newX = leftEdge + 15;
+                this.pacman.setPosition(newX, pacmanY);
+
+                // Update grid movement targets to prevent conflicts
+                this.pacman.setData("targetX", newX);
+                this.pacman.setData("targetY", pacmanY);
+                this.pacman.setData("isMoving", false);
+
                 console.log("Warped from right to left");
             }
         }
@@ -839,12 +916,19 @@ export class Game extends Scene {
         const offsetY = (this.cameras.main.height - mazeHeight) / 2;
 
         // Reset Pac-Man position to bottom area (row 17, col 9)
-        this.pacman.setPosition(
-            offsetX + 9 * this.tileSize + this.tileSize / 2,
-            offsetY + 17 * this.tileSize + this.tileSize / 2
-        );
+        const respawnX = offsetX + 9 * this.tileSize + this.tileSize / 2;
+        const respawnY = offsetY + 17 * this.tileSize + this.tileSize / 2;
+
+        this.pacman.setPosition(respawnX, respawnY);
         this.pacmanDirection = "right";
         this.pacman.setAngle(0);
+
+        // Reset Pac-Man grid movement data
+        this.pacman.setData("targetX", respawnX);
+        this.pacman.setData("targetY", respawnY);
+        this.pacman.setData("isMoving", false);
+        this.pacman.setData("direction", "right");
+        this.pacman.setData("nextDirection", "right");
 
         // Reset ghosts to their starting positions
         this.ghosts.children.entries.forEach((ghost: any, index) => {
@@ -1847,6 +1931,24 @@ export class Game extends Scene {
         const nextPos = this.getNextPosition(currentPos, direction);
 
         // Check if the next position is walkable
+        if (this.isWalkable(nextPos.row, nextPos.col)) {
+            const worldPos = this.gridToWorld(nextPos.row, nextPos.col);
+            return worldPos;
+        }
+
+        return null; // Can't move in that direction
+    }
+
+    /**
+     * Get the next grid position for Pac-Man based on direction
+     */
+    getPacManNextGridPosition(
+        direction: string
+    ): { x: number; y: number } | null {
+        const currentPos = this.worldToGrid(this.pacman.x, this.pacman.y);
+        const nextPos = this.getNextPosition(currentPos, direction);
+
+        // Check if the next position is walkable (not a wall)
         if (this.isWalkable(nextPos.row, nextPos.col)) {
             const worldPos = this.gridToWorld(nextPos.row, nextPos.col);
             return worldPos;

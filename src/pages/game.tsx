@@ -39,9 +39,9 @@ export default function Game() {
         document.addEventListener("fullscreenchange", handleFullscreenChange);
 
         // Request fullscreen after a small delay to ensure user interaction
-        const timeoutId = setTimeout(() => {
-            requestFullscreen();
-        }, 100);
+        // const timeoutId = setTimeout(() => {
+        //     requestFullscreen();
+        // }, 100);
 
         // Listen for game events
         const handleGameUpdate = (event: CustomEvent) => {
