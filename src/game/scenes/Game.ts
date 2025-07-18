@@ -1,5 +1,6 @@
 import { EventBus } from "../EventBus";
 import { Scene } from "phaser";
+import { HybridLeaderboard } from "../../utils/leaderboardAPI";
 
 interface GameState {
     score: number;
@@ -78,13 +79,20 @@ export class Game extends Scene {
         this.camera = this.cameras.main;
         this.camera.setBackgroundColor(0x000000);
 
-        // Initialize game state
-        this.gameState = {
-            score: 0,
-            lives: 3,
-            level: 1,
-            status: "playing",
-        };
+        // Initialize or restore game state from scene data
+        const sceneData = this.scene.settings.data as any;
+        if (sceneData && sceneData.gameState) {
+            // Restore game state from previous scene restart
+            this.gameState = { ...sceneData.gameState };
+        } else {
+            // Initialize new game state
+            this.gameState = {
+                score: 0,
+                lives: 3,
+                level: 1,
+                status: "playing",
+            };
+        }
 
         // Initialize game flags
         this.pacmanDying = false;
@@ -325,29 +333,33 @@ export class Game extends Scene {
 
     createAnimations() {
         // Pac-Man eating animation
-        this.anims.create({
-            key: "pacman_chomp",
-            frames: [
-                { key: "pacman_0" },
-                { key: "pacman_1" },
-                { key: "pacman_2" },
-                { key: "pacman_1" },
-            ],
-            frameRate: 8,
-            repeat: -1,
-        });
+        if (!this.anims.exists("pacman_chomp")) {
+            this.anims.create({
+                key: "pacman_chomp",
+                frames: [
+                    { key: "pacman_0" },
+                    { key: "pacman_1" },
+                    { key: "pacman_2" },
+                    { key: "pacman_1" },
+                ],
+                frameRate: 8,
+                repeat: -1,
+            });
+        }
 
         // Pac-Man death animation
-        this.anims.create({
-            key: "pacman_death",
-            frames: [
-                { key: "pacdeath_0" },
-                { key: "pacdeath_1" },
-                { key: "pacdeath_2" },
-            ],
-            frameRate: 4,
-            repeat: 0,
-        });
+        if (!this.anims.exists("pacman_death")) {
+            this.anims.create({
+                key: "pacman_death",
+                frames: [
+                    { key: "pacdeath_0" },
+                    { key: "pacdeath_1" },
+                    { key: "pacdeath_2" },
+                ],
+                frameRate: 4,
+                repeat: 0,
+            });
+        }
 
         this.pacman.play("pacman_chomp");
     }
@@ -699,6 +711,14 @@ export class Game extends Scene {
 
     hitGhost(pacman: any, ghost: any) {
         if (this.powerMode) {
+            // Check if ghost is already dead to prevent multiple score increases
+            if (ghost.getData("isDead")) {
+                return; // Don't process multiple hits on the same ghost
+            }
+
+            // Immediately mark ghost as dead to prevent further collisions
+            ghost.setData("isDead", true);
+
             // Eat the ghost
             this.gameState.score += 200;
 
@@ -865,7 +885,8 @@ export class Game extends Scene {
 
     nextLevel() {
         this.gameState.level++;
-        this.ghostSpeed += 10;
+        this.ghostSpeed += 2;
+        console.log("Next Level", this.gameState);
 
         // Stop all sounds before restarting scene
         this.stopSiren();
@@ -874,7 +895,11 @@ export class Game extends Scene {
         // Play intermission sound
         this.sounds.intermission.play();
 
-        this.scene.restart();
+        this.emitGameUpdate();
+
+        // Pass current game state to scene restart to preserve progress
+        this.scene.restart({ gameState: this.gameState });
+        console.log("Restart: ", this.gameState);
     }
 
     gameOver() {
@@ -899,6 +924,7 @@ export class Game extends Scene {
     }
 
     showUsernameInput() {
+        // this.nextLevel();
         // Create a semi-transparent overlay
         const overlay = this.add.rectangle(
             this.cameras.main.centerX,
@@ -986,10 +1012,10 @@ export class Game extends Scene {
         let cursorTimer: Phaser.Time.TimerEvent | null = null;
 
         // Handle keyboard input
-        const handleKeyboard = (event: KeyboardEvent) => {
+        const handleKeyboard = async (event: KeyboardEvent) => {
             if (event.key === "Enter" && username.trim().length > 0) {
                 // Submit username to leaderboard (trim before submitting)
-                this.submitToLeaderboard(username.trim());
+                await this.submitToLeaderboard(username.trim());
 
                 // Remove event listener
                 this.input.keyboard?.off("keydown", handleKeyboard);
@@ -1051,69 +1077,67 @@ export class Game extends Scene {
         });
     }
 
-    submitToLeaderboard(username: string) {
+    async submitToLeaderboard(username: string) {
         const leaderboardEntry = {
             name: username,
             score: this.gameState.score,
             level: this.gameState.level,
-            date: new Date().toISOString(),
         };
 
-        // Get existing leaderboard from localStorage
-        let leaderboard = [];
         try {
-            const existingData = localStorage.getItem("pacman-leaderboard");
-            if (existingData) {
-                leaderboard = JSON.parse(existingData);
-            }
-        } catch (error) {
-            console.warn("Could not load existing leaderboard:", error);
-            leaderboard = [];
-        }
+            // Submit to API with fallback to localStorage
+            const result = await HybridLeaderboard.submitScore(
+                leaderboardEntry
+            );
 
-        // Add new entry
-        leaderboard.push(leaderboardEntry);
+            console.log("Score submitted successfully:", result.message);
 
-        // Sort by score (highest first) and keep top 10
-        leaderboard.sort((a: any, b: any) => b.score - a.score);
-        leaderboard = leaderboard.slice(0, 10);
+            // Emit leaderboard update event with API response
+            window.dispatchEvent(
+                new CustomEvent("phaser-game-event", {
+                    detail: {
+                        type: "leaderboardUpdate",
+                        data: {
+                            leaderboard: result.data.leaderboard,
+                            newEntry: result.data.submittedScore,
+                            rank: result.data.rank,
+                        },
+                    },
+                })
+            );
 
-        // Save back to localStorage
-        try {
-            localStorage.setItem(
-                "pacman-leaderboard",
-                JSON.stringify(leaderboard)
+            // Also emit game over event with username
+            window.dispatchEvent(
+                new CustomEvent("phaser-game-event", {
+                    detail: {
+                        type: "gameOver",
+                        data: {
+                            score: this.gameState.score,
+                            level: this.gameState.level,
+                            username,
+                            rank: result.data.rank,
+                        },
+                    },
+                })
             );
         } catch (error) {
-            console.warn("Could not save leaderboard:", error);
+            console.error("Failed to submit score:", error);
+
+            // Emit error event but still proceed with game over
+            window.dispatchEvent(
+                new CustomEvent("phaser-game-event", {
+                    detail: {
+                        type: "gameOver",
+                        data: {
+                            score: this.gameState.score,
+                            level: this.gameState.level,
+                            username: username,
+                            error: "Failed to submit score to leaderboard",
+                        },
+                    },
+                })
+            );
         }
-
-        // Emit leaderboard update event
-        window.dispatchEvent(
-            new CustomEvent("phaser-game-event", {
-                detail: {
-                    type: "leaderboardUpdate",
-                    data: {
-                        leaderboard: leaderboard,
-                        newEntry: leaderboardEntry,
-                    },
-                },
-            })
-        );
-
-        // Also emit game over event with username
-        window.dispatchEvent(
-            new CustomEvent("phaser-game-event", {
-                detail: {
-                    type: "gameOver",
-                    data: {
-                        score: this.gameState.score,
-                        username: username,
-                        leaderboard: leaderboard,
-                    },
-                },
-            })
-        );
     }
 
     showPostGameOptions() {
@@ -1183,7 +1207,7 @@ export class Game extends Scene {
         const leaderboardInstr = this.add.text(
             0,
             50,
-            "PRESS L FOR LEADERBOARD",
+            "PRESS L FOR HALL OF FAME",
             {
                 fontSize: "16px",
                 color: "#00ff00",
@@ -1347,6 +1371,7 @@ export class Game extends Scene {
     }
 
     emitGameUpdate() {
+        console.log("Game State: ", this.gameState);
         window.dispatchEvent(
             new CustomEvent("phaser-game-event", {
                 detail: {
@@ -1521,7 +1546,7 @@ export class Game extends Scene {
                 while (currentPos) {
                     path.unshift(currentPos);
                     const currentPosKey = `${currentPos.row},${currentPos.col}`;
-                    currentPos = parentMap.get(currentPosKey) || null;
+                    currentPos = parentMap.get(currentPosKey)!;
 
                     // Prevent infinite loops
                     if (path.length > 50) break;

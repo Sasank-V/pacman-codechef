@@ -18,20 +18,6 @@ export default function Game() {
     const [gameStatus, setGameStatus] = useState("playing"); // 'playing', 'paused', 'gameOver'
     const [isFullscreen, setIsFullscreen] = useState(false);
 
-    const toggleFullscreen = async () => {
-        try {
-            if (!document.fullscreenElement) {
-                await document.documentElement.requestFullscreen();
-                setIsFullscreen(true);
-            } else {
-                await document.exitFullscreen();
-                setIsFullscreen(false);
-            }
-        } catch (error) {
-            console.log("Fullscreen toggle failed:", error);
-        }
-    };
-
     useEffect(() => {
         // Request fullscreen when the game starts
         const requestFullscreen = async () => {
@@ -60,6 +46,7 @@ export default function Game() {
         // Listen for game events
         const handleGameUpdate = (event: CustomEvent) => {
             const { type, data } = event.detail;
+            console.log("Update: ", event.detail);
 
             if (type === "scoreUpdate") {
                 const { score, lives, level, status } = data;

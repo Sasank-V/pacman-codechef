@@ -9,13 +9,50 @@ const inter = Inter({ subsets: ["latin"] });
 export default function Landing() {
     const [highScore, setHighScore] = useState(0);
     const [isAnimating, setIsAnimating] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        // Load high score from localStorage
-        const savedHighScore = localStorage.getItem("pacman-highscore");
-        if (savedHighScore) {
-            setHighScore(parseInt(savedHighScore));
-        }
+        const fetchHighScore = async () => {
+            try {
+                // Try to fetch high score from API
+                const response = await fetch("/api/leaderboard?limit=1");
+                if (response.ok) {
+                    const data = await response.json();
+                    if (
+                        data.data &&
+                        data.data.stats &&
+                        data.data.stats.highestScore
+                    ) {
+                        setHighScore(data.data.stats.highestScore);
+                    } else {
+                        // Fallback to localStorage if API doesn't have data
+                        const savedHighScore =
+                            localStorage.getItem("pacman-highscore");
+                        if (savedHighScore) {
+                            setHighScore(parseInt(savedHighScore));
+                        }
+                    }
+                } else {
+                    // Fallback to localStorage if API call fails
+                    const savedHighScore =
+                        localStorage.getItem("pacman-highscore");
+                    if (savedHighScore) {
+                        setHighScore(parseInt(savedHighScore));
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching high score:", error);
+                // Fallback to localStorage on error
+                const savedHighScore = localStorage.getItem("pacman-highscore");
+                if (savedHighScore) {
+                    setHighScore(parseInt(savedHighScore));
+                }
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchHighScore();
 
         // Start animation after component mounts
         setTimeout(() => setIsAnimating(true), 100);
@@ -44,7 +81,7 @@ export default function Landing() {
                     <div className={styles.scoreDisplay}>
                         <div className={styles.scoreLabel}>HIGH SCORE</div>
                         <div className={styles.scoreValue}>
-                            {highScore.toLocaleString()}
+                            {isLoading ? "---" : highScore.toLocaleString()}
                         </div>
                     </div>
 
@@ -151,7 +188,7 @@ export default function Landing() {
                         >
                             <div className={styles.buttonText}>
                                 <span className={styles.buttonIcon}>★</span>
-                                HIGH SCORES
+                                HALL OF FAME
                             </div>
                         </Link>
                     </div>
