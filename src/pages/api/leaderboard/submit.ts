@@ -47,6 +47,38 @@ export default async function handler(
             timestamp: Date.now(),
         };
 
+        // Check if the same score already exists
+        const existingScore = await collection.findOne({
+            name: scoreEntry.name,
+            score: scoreEntry.score,
+            level: scoreEntry.level,
+        });
+
+        if (existingScore) {
+            // Get updated leaderboard (top 10) for response
+            const leaderboard = await collection
+                .find({})
+                .sort({ score: -1, timestamp: 1 })
+                .limit(10)
+                .project({ _id: 0 })
+                .toArray();
+
+            return res.status(200).json({
+                message: "Score already saved",
+                data: {
+                    submittedScore: existingScore,
+                    leaderboard: leaderboard,
+                    rank:
+                        leaderboard.findIndex(
+                            (entry) =>
+                                entry.name === existingScore.name &&
+                                entry.score === existingScore.score &&
+                                entry.timestamp === existingScore.timestamp
+                        ) + 1,
+                },
+            });
+        }
+
         // Insert the score
         const result = await collection.insertOne(scoreEntry);
 
