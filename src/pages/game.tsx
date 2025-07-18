@@ -66,7 +66,7 @@ export default function Game() {
         );
 
         return () => {
-            clearTimeout(timeoutId);
+            // clearTimeout(timeoutId);
             document.removeEventListener(
                 "fullscreenchange",
                 handleFullscreenChange

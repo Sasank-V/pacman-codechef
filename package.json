@@ -24,6 +24,7 @@
     "scripts": {
         "dev": "node log.js dev & next dev -p 8080",
         "build": "node log.js build & next build",
+        "start": "next start -p 8080",
         "dev-nolog": "next dev -p 8080",
         "build-nolog": "next build"
     },

@@ -82,7 +82,9 @@ export default async function handler(
             message: "Internal server error",
             error:
                 process.env.NODE_ENV === "development"
-                    ? error.message
+                    ? error instanceof Error
+                        ? error.message
+                        : String(error)
                     : undefined,
         });
     }
