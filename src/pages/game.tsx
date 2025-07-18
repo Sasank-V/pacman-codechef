@@ -19,11 +19,17 @@ export default function Game() {
     const [isFullscreen, setIsFullscreen] = useState(false);
 
     useEffect(() => {
-        // Request fullscreen when the game starts
+        // Fullscreen functionality
         const requestFullscreen = async () => {
             try {
-                if (document.documentElement.requestFullscreen) {
-                    await document.documentElement.requestFullscreen();
+                if (!document.fullscreenElement) {
+                    if (document.documentElement.requestFullscreen) {
+                        await document.documentElement.requestFullscreen();
+                    } else if ((document.documentElement as any).webkitRequestFullscreen) {
+                        await (document.documentElement as any).webkitRequestFullscreen();
+                    } else if ((document.documentElement as any).msRequestFullscreen) {
+                        await (document.documentElement as any).msRequestFullscreen();
+                    }
                     setIsFullscreen(true);
                 }
             } catch (error) {
@@ -31,17 +37,72 @@ export default function Game() {
             }
         };
 
-        // Listen for fullscreen changes
-        const handleFullscreenChange = () => {
-            setIsFullscreen(!!document.fullscreenElement);
+        // Function to force fullscreen if not already in fullscreen
+        const forceFullscreen = () => {
+            if (!document.fullscreenElement) {
+                requestFullscreen();
+            }
         };
 
-        document.addEventListener("fullscreenchange", handleFullscreenChange);
+        // Listen for fullscreen changes
+        const handleFullscreenChange = () => {
+            const isCurrentlyFullscreen = !!(
+                document.fullscreenElement ||
+                (document as any).webkitFullscreenElement ||
+                (document as any).msFullscreenElement
+            );
+            setIsFullscreen(isCurrentlyFullscreen);
+            
+            // If user exits fullscreen, try to re-enter after a short delay
+            if (!isCurrentlyFullscreen) {
+                setTimeout(() => {
+                    forceFullscreen();
+                }, 1000);
+            }
+        };
 
-        // Request fullscreen after a small delay to ensure user interaction
-        // const timeoutId = setTimeout(() => {
-        //     requestFullscreen();
-        // }, 100);
+        // Listen for various fullscreen events
+        document.addEventListener("fullscreenchange", handleFullscreenChange);
+        document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+        document.addEventListener("msfullscreenchange", handleFullscreenChange);
+
+        // Request fullscreen on user interaction
+        const handleUserInteraction = () => {
+            forceFullscreen();
+            // Remove listeners after first interaction
+            document.removeEventListener("click", handleUserInteraction);
+            document.removeEventListener("keydown", handleUserInteraction);
+            document.removeEventListener("touchstart", handleUserInteraction);
+        };
+
+        // Add interaction listeners
+        document.addEventListener("click", handleUserInteraction);
+        document.addEventListener("keydown", handleUserInteraction);
+        document.addEventListener("touchstart", handleUserInteraction);
+
+        // Also try to request fullscreen immediately
+        const immediateFullscreen = setTimeout(() => {
+            forceFullscreen();
+        }, 500);
+
+        // Keyboard shortcut for fullscreen (F key or F11)
+        const handleKeyPress = (event: KeyboardEvent) => {
+            if (event.key === 'f' || event.key === 'F' || event.key === 'F11') {
+                event.preventDefault();
+                if (!document.fullscreenElement) {
+                    forceFullscreen();
+                } else {
+                    document.exitFullscreen?.();
+                }
+            }
+            // ESC key warning
+            if (event.key === 'Escape' && document.fullscreenElement) {
+                // Show a brief message that ESC will exit fullscreen
+                console.log("Press F to re-enter fullscreen");
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyPress);
 
         // Listen for game events
         const handleGameUpdate = (event: CustomEvent) => {
@@ -66,11 +127,14 @@ export default function Game() {
         );
 
         return () => {
-            // clearTimeout(timeoutId);
-            document.removeEventListener(
-                "fullscreenchange",
-                handleFullscreenChange
-            );
+            clearTimeout(immediateFullscreen);
+            document.removeEventListener("fullscreenchange", handleFullscreenChange);
+            document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+            document.removeEventListener("msfullscreenchange", handleFullscreenChange);
+            document.removeEventListener("click", handleUserInteraction);
+            document.removeEventListener("keydown", handleUserInteraction);
+            document.removeEventListener("touchstart", handleUserInteraction);
+            document.removeEventListener("keydown", handleKeyPress);
             window.removeEventListener(
                 "phaser-game-event",
                 handleGameUpdate as EventListener
@@ -160,6 +224,19 @@ export default function Game() {
                         </div>
                         <div className={styles.gameControls}>
                             <button
+                                onClick={() => {
+                                    if (!document.fullscreenElement) {
+                                        document.documentElement.requestFullscreen?.();
+                                    } else {
+                                        document.exitFullscreen?.();
+                                    }
+                                }}
+                                className={styles.fullscreenButton}
+                                title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                            >
+                                {isFullscreen ? "🗗" : "⛶"}
+                            </button>
+                            <button
                                 onClick={handleEndGame}
                                 className={styles.endGameButton}
                                 title="End Game and Save Score"
@@ -168,6 +245,21 @@ export default function Game() {
                             </button>
                         </div>
                     </div>
+
+                    {/* Fullscreen notification */}
+                    {!isFullscreen && (
+                        <div className={styles.fullscreenWarning}>
+                            <div className={styles.warningContent}>
+                                🎮 For the best gaming experience, please play in fullscreen!
+                                <button 
+                                    onClick={() => document.documentElement.requestFullscreen?.()}
+                                    className={styles.warningButton}
+                                >
+                                    Go Fullscreen
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className={styles.gameArea}>
                         <PacManGameWithoutSSR onGameOver={handleGameOver} />

@@ -1008,23 +1008,32 @@ export class Game extends Scene {
     }
 
     showUsernameInput() {
+        // Ensure camera is available and has valid dimensions
+        if (!this.cameras || !this.cameras.main) {
+            console.error("Camera not available for showUsernameInput");
+            return;
+        }
+
+        const camera = this.cameras.main;
+        const centerX = camera.centerX || camera.width / 2 || 400;
+        const centerY = camera.centerY || camera.height / 2 || 300;
+        const screenWidth = camera.width || 800;
+        const screenHeight = camera.height || 600;
+
         // this.nextLevel();
         // Create a semi-transparent overlay
         const overlay = this.add.rectangle(
-            this.cameras.main.centerX,
-            this.cameras.main.centerY,
-            this.cameras.main.width,
-            this.cameras.main.height,
+            centerX,
+            centerY,
+            screenWidth,
+            screenHeight,
             0x000000,
             0.8
         );
         overlay.setDepth(1000);
 
         // Create input container
-        const container = this.add.container(
-            this.cameras.main.centerX,
-            this.cameras.main.centerY
-        );
+        const container = this.add.container(centerX, centerY);
         container.setDepth(1001);
 
         // Game Over text
@@ -1232,22 +1241,31 @@ export class Game extends Scene {
             }
         });
 
+        // Ensure camera is available and has valid dimensions
+        if (!this.cameras || !this.cameras.main) {
+            console.error("Camera not available for showPostGameOptions");
+            return;
+        }
+
+        const camera = this.cameras.main;
+        const centerX = camera.centerX || camera.width / 2 || 400;
+        const centerY = camera.centerY || camera.height / 2 || 300;
+        const screenWidth = camera.width || 800;
+        const screenHeight = camera.height || 600;
+
         // Create a semi-transparent overlay with higher depth
         const overlay = this.add.rectangle(
-            this.cameras.main.centerX,
-            this.cameras.main.centerY,
-            this.cameras.main.width,
-            this.cameras.main.height,
+            centerX,
+            centerY,
+            screenWidth,
+            screenHeight,
             0x000000,
             0.9
         );
         overlay.setDepth(2000); // Higher depth than username input
 
         // Create container for post-game options
-        const container = this.add.container(
-            this.cameras.main.centerX,
-            this.cameras.main.centerY
-        );
+        const container = this.add.container(centerX, centerY);
         container.setDepth(2001); // Higher depth than username input
 
         // Score saved message
