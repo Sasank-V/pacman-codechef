@@ -44,8 +44,6 @@ A classic PAC-MAN arcade game recreation built with Phaser 3 and Next.js, featur
 - **React 19**: UI components and state management
 - **CSS Modules**: Styled components with retro theming
 
-![PAC-MAN Screenshot](screenshot.png)
-
 ## 🎯 Controls
 
 | Key | Action |
